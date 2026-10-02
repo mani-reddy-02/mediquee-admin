@@ -10,17 +10,20 @@ import AdminLogin from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
 import Hospitals from './pages/Hospitals';
+import Departments from './pages/Departments';
+import DepartmentDetails from './pages/DepartmentDetails';
 import Doctors from './pages/Doctors';
 import Appointments from './pages/Appointments';
 import Verification from './pages/Verification';
 import Reports from './pages/Reports';
 import Notifications from './pages/Notifications';
+import Requests from './pages/Requests';
 import Settings from './pages/Settings';
+import HomePosters from './pages/HomePosters';
 
 // Advanced Pages
 import Transactions from './pages/Transactions';
 import Settlements from './pages/Settlements';
-import Providers from './pages/Providers';
 import LabTests from './pages/LabTests';
 import {
   OPBookings,
@@ -60,8 +63,9 @@ function App() {
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="users" element={<Users />} />
               <Route path="hospitals" element={<Hospitals />} />
+              <Route path="departments" element={<Departments />} />
+              <Route path="departments/:id" element={<DepartmentDetails />} />
               <Route path="doctors" element={<Doctors />} />
-              <Route path="providers" element={<Providers />} />
               
               <Route path="appointments" element={<Appointments />} />
               <Route path="services/op" element={<OPBookings />} />
@@ -72,11 +76,12 @@ function App() {
               
               <Route path="transactions" element={<Transactions />} />
               <Route path="settlements" element={<Settlements />} />
-              
               <Route path="verification" element={<Verification />} />
               <Route path="reports" element={<Reports />} />
               <Route path="notifications" element={<Notifications />} />
+              <Route path="requests" element={<Requests />} />
               <Route path="activity" element={<ActivityLog />} />
+              <Route path="home-posters" element={<HomePosters />} />
               <Route path="settings" element={<Settings />} />
             </Route>
 
