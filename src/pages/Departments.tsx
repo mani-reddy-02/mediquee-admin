@@ -1,252 +1,255 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Network, Activity, Stethoscope, Building2 } from 'lucide-react';
-import KpiCard from '../components/ui/KpiCard';
 import DataTable, { Column } from '../components/ui/DataTable';
-import StatusBadge from '../components/ui/StatusBadge';
 import { useAdminAuth } from '../contexts/AuthContext';
-import { departmentService } from '../services/departmentService';
-
-interface DepartmentOverview {
-  id: string;
-  name: string;
-  description: string;
-  diseaseCount: number;
-  hospitalCount: number;
-  doctorCount: number;
-  status: 'ACTIVE' | 'INACTIVE';
-  createdAt: string;
-}
+import { Plus, Edit, Trash2, X } from 'lucide-react';
+import DepartmentModal from '../components/DepartmentModal';
+import { IconImage } from '../components/IconImage';
 
 const Departments: React.FC = () => {
-  const { token } = useAdminAuth();
+  const { token, adminUser } = useAdminAuth();
   const navigate = useNavigate();
-  const [departments, setDepartments] = useState<DepartmentOverview[]>([]);
-  const [search, setSearch] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newDeptName, setNewDeptName] = useState('');
-  const [newDeptDesc, setNewDeptDesc] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingDept, setEditingDept] = useState<any>(null);
 
-  const fetchDepartments = async () => {
-    if (!token) return;
-    const res = await departmentService.getDepartments(token);
-    if (res.success && Array.isArray(res.data)) {
-      setDepartments(res.data);
-    }
-  };
+  // Pagination & Filtering State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalResults, setTotalResults] = useState(0);
+  const limit = 20;
+
+  const [search, setSearch] = useState('');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  const [filters, setFilters] = useState({
+    status: 'ALL'
+  });
 
   useEffect(() => {
-    fetchDepartments();
-  }, [token]);
-
-  const handleAddDepartment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token || !newDeptName.trim()) return;
-    
-    setIsSubmitting(true);
-    setError('');
-    
-    const res = await departmentService.createDepartment(token, newDeptName, newDeptDesc);
-    if (res.success) {
-      setShowAddModal(false);
-      setNewDeptName('');
-      setNewDeptDesc('');
-      fetchDepartments(); // Refresh list
-    } else {
-      setError(res.error?.message || 'Failed to create department');
+    function handleClickOutside(event: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(event.target as Node)) {
+        setIsFilterOpen(false);
+      }
     }
-    setIsSubmitting(false);
+    if (isFilterOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isFilterOpen]);
+
+  const fetchDepartments = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: limit.toString(),
+        ...(search && { search }),
+        ...(filters.status !== 'ALL' && { status: filters.status })
+      });
+
+      const res = await fetch(`${API_URL}/admin/departments?${params.toString()}`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        setDepartments(data.data);
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages);
+          setTotalResults(data.pagination.total);
+        } else {
+          setTotalResults(data.data.length);
+          setTotalPages(Math.ceil(data.data.length / limit));
+        }
+      } else {
+        setError('Unable to load departments.');
+      }
+    } catch (err) {
+      setError('Unable to load departments.');
+    } finally { 
+      setLoading(false); 
+    }
+  }, [token, currentPage, search, filters]);
+
+  useEffect(() => { fetchDepartments(); }, [fetchDepartments]);
+
+  // Reset to page 1 on search or filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filters]);
+
+  const handleClearFilters = () => {
+    setFilters({ status: 'ALL' });
+    setCurrentPage(1);
+    setIsFilterOpen(false);
   };
 
-  const filtered = departments.filter(d => 
-    d.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleApplyFilters = () => {
+    setIsFilterOpen(false);
+  };
 
-  const columns: Column<DepartmentOverview>[] = [
+  const handleDeleteDepartment = async (e: React.MouseEvent, dept: any) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete the department "${dept.name}"?`)) {
+      return;
+    }
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+      const res = await fetch(`${API_URL}/admin/departments/${dept.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchDepartments();
+      } else {
+        alert(data.error?.message || 'Could not delete department.');
+      }
+    } catch (err) {
+      alert('Network error while deleting department.');
+    }
+  };
+
+  const columns: Column<any>[] = [
     {
-      header: 'Department',
-      accessor: (d) => (
-        <div>
-          <p className="font-medium text-slate-900 ">{d.name}</p>
-          {d.description && <p className="text-xs text-slate-500  mt-0.5 line-clamp-1">{d.description}</p>}
+      header: 'S.No',
+      accessor: (_, index) => (
+        <span className="text-sm text-slate-500">
+          {((currentPage - 1) * limit) + index + 1}
+        </span>
+      ),
+    },
+    { 
+      header: 'Department', 
+      accessor: (item) => (
+        <div className="flex items-center space-x-3">
+          <IconImage icon={item.icon} name={item.name} size="sm" rounded="rounded-lg" />
+          <span className="font-medium text-slate-900">{item.name}</span>
         </div>
-      ),
+      )
     },
-    {
-      header: 'Diseases',
-      accessor: (d) => (
-        <div className="flex items-center gap-1.5 text-slate-600 ">
-          <Activity size={16} />
-          <span>{d.diseaseCount}</span>
+    { header: 'Diseases', accessor: 'diseaseCount' },
+    { header: 'Doctors', accessor: 'doctorCount' },
+    { header: 'Hospitals', accessor: 'hospitalCount' },
+    { 
+      header: 'Status', 
+      accessor: (item) => item.isActive ? 
+        <span className="text-green-600 bg-green-100 px-2 py-1 rounded">Active</span> : 
+        <span className="text-red-600 bg-red-100 px-2 py-1 rounded">Inactive</span> 
+    },
+    { 
+      header: 'Created Date', 
+      accessor: (item) => <span className="text-slate-500">{new Date(item.createdAt).toLocaleDateString()}</span>
+    },
+    { 
+      header: 'Actions', 
+      accessor: (item) => (
+        <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
+          <button title="Edit Department" onClick={() => { setEditingDept(item); setModalOpen(true); }} className="text-indigo-600 hover:text-indigo-900 p-1">
+            <Edit size={16}/>
+          </button>
+          <button title="Delete Department" onClick={(e) => handleDeleteDepartment(e, item)} className="text-red-500 hover:text-red-700 p-1">
+            <Trash2 size={16}/>
+          </button>
         </div>
-      ),
-    },
-    {
-      header: 'Doctors',
-      accessor: (d) => (
-        <div className="flex items-center gap-1.5 text-slate-600 ">
-          <Stethoscope size={16} />
-          <span>{d.doctorCount}</span>
-        </div>
-      ),
-    },
-    {
-      header: 'Hospitals',
-      accessor: (d) => (
-        <div className="flex items-center gap-1.5 text-slate-600 ">
-          <Building2 size={16} />
-          <span>{d.hospitalCount}</span>
-        </div>
-      ),
-    },
-    {
-      header: 'Status',
-      accessor: (d) => <StatusBadge status={d.status} />,
-    },
-    {
-      header: 'Actions',
-      accessor: (d) => (
-        <button
-          onClick={() => navigate(`/admin/departments/${d.id}`)}
-          className="text-sm font-medium text-blue-600  hover:text-blue-700 :text-blue-300"
-        >
-          View Details
-        </button>
-      ),
-    },
+      )
+    }
   ];
 
-  const totalDepts = departments.length;
-  const activeDepts = departments.filter(d => d.status === 'ACTIVE').length;
-  const inactiveDepts = totalDepts - activeDepts;
-  const totalDiseases = departments.reduce((acc, d) => acc + d.diseaseCount, 0);
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 ">Departments</h1>
-          <p className="mt-1 text-slate-500 ">Manage medical departments and their associated diseases and doctors.</p>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Departments</h1>
+        {(adminUser?.role === 'SUPER_ADMIN' || adminUser?.role === 'HOSPITAL_ADMIN') && (
+          <button onClick={() => { setEditingDept(null); setModalOpen(true); }} className="bg-blue-600 hover:bg-blue-700 transition-colors text-white px-4 py-2 rounded flex items-center shadow-sm">
+            <Plus size={16} className="mr-2"/> Add New Department
+          </button>
+        )}
+      </div>
+
+      {error ? (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-center mb-6">
+          <p className="mb-2">{error}</p>
+          <button onClick={() => fetchDepartments()} className="px-4 py-2 bg-red-100 hover:bg-red-200 rounded font-medium transition-colors">
+            Retry
+          </button>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          + Add Department
-        </button>
-      </div>
+      ) : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KpiCard
-          title="Total Departments"
-          value={totalDepts.toString()}
-          icon={Network}
-          iconColor="text-blue-600"
-          iconBg="bg-blue-50"
+      <div className="relative">
+        <DataTable 
+          columns={columns} 
+          data={departments} 
+          keyExtractor={(item) => item.id} 
+          searchPlaceholder="Search departments..."
+          onSearch={(value) => setSearch(value)}
+          onRowClick={(item) => navigate(`/admin/departments/${item.id}`)}
+          emptyMessage={loading ? "Loading departments..." : "No departments found."}
+          onFilterClick={() => setIsFilterOpen(!isFilterOpen)}
+          pagination={{
+            currentPage,
+            totalPages,
+            totalResults,
+            pageSize: limit,
+            onPageChange: setCurrentPage
+          }}
         />
-        <KpiCard
-          title="Active Departments"
-          value={activeDepts.toString()}
-          icon={Network}
-          iconColor="text-emerald-600"
-          iconBg="bg-emerald-50"
-        />
-        <KpiCard
-          title="Inactive Departments"
-          value={inactiveDepts.toString()}
-          icon={Network}
-          iconColor="text-slate-600"
-          iconBg="bg-slate-50"
-        />
-        <KpiCard
-          title="Total Diseases"
-          value={totalDiseases.toString()}
-          icon={Activity}
-          iconColor="text-indigo-600"
-          iconBg="bg-indigo-50"
-        />
-      </div>
 
-      <div className="bg-white  border border-slate-200  rounded-xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-slate-200  flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-50/50 ">
-          <input
-            type="text"
-            placeholder="Search departments..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full sm:max-w-xs px-3 py-2 bg-white  border border-slate-300  rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500  transition-colors"
-          />
-        </div>
-        
-        <DataTable
-          columns={columns}
-          data={filtered}
-          keyExtractor={(d) => d.id}
-          emptyMessage={search ? "No departments found matching your search." : "No departments available."}
-        />
-      </div>
-
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-4 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-900">Add Department</h2>
+        {isFilterOpen && (
+          <div 
+            ref={filterRef}
+            className="absolute right-0 top-16 mt-2 w-72 bg-white rounded-xl shadow-lg border border-slate-200 z-10"
+          >
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-semibold text-slate-800">Filters</h3>
+              <button onClick={() => setIsFilterOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
             </div>
-            <form onSubmit={handleAddDepartment} className="p-4 space-y-4">
-              {error && (
-                <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-              
+            <div className="p-4 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Department Name *</label>
-                <input
-                  type="text"
-                  value={newDeptName}
-                  onChange={(e) => setNewDeptName(e.target.value)}
-                  placeholder="e.g. Cardiology"
-                  required
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <textarea
-                  value={newDeptDesc}
-                  onChange={(e) => setNewDeptDesc(e.target.value)}
-                  placeholder="Optional description"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                />
-              </div>
-              
-              <div className="flex items-center gap-3 pt-4 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50"
-                  disabled={isSubmitting}
+                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <select 
+                  value={filters.status}
+                  onChange={(e) => setFilters({...filters, status: e.target.value})}
+                  className="w-full border border-slate-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500 p-2"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !newDeptName.trim()}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Saving...' : 'Add Department'}
-                </button>
+                  <option value="ALL">All Statuses</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                </select>
               </div>
-            </form>
+            </div>
+            <div className="p-4 border-t border-slate-100 flex gap-3">
+              <button 
+                onClick={handleClearFilters}
+                className="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Clear Filters
+              </button>
+              <button 
+                onClick={handleApplyFilters}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Apply Filters
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      
+      {modalOpen && <DepartmentModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSuccess={fetchDepartments} existing={editingDept} />}
     </div>
   );
 };
-
 export default Departments;

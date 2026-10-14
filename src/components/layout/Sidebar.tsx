@@ -4,7 +4,7 @@ import {
   LayoutDashboard, 
   Users, 
   UserCircle,
-  Building2, 
+  Building2, FlaskConical, 
   Stethoscope, 
   CalendarCheck, 
   ShieldCheck, 
@@ -33,7 +33,7 @@ interface SidebarProps {
 
 import { useAdminAuth } from '../../contexts/AuthContext';
 
-const navGroups = [
+export const navGroups = [
   {
     title: 'Overview',
     items: [
@@ -43,8 +43,7 @@ const navGroups = [
   {
     title: 'People',
     items: [
-      { name: 'Users', path: '/admin/users', icon: Users },
-      { name: 'Patients', path: '/admin/users?role=patient', icon: UserCircle },
+      { name: 'Patients', path: '/admin/patients', icon: UserCircle },
       { name: 'Doctors', path: '/admin/doctors', icon: Stethoscope }
     ]
   },
@@ -52,14 +51,15 @@ const navGroups = [
     title: 'Healthcare Network',
     items: [
       { name: 'Hospitals', path: '/admin/hospitals', icon: Building2 },
-      { name: 'Departments', path: '/admin/departments', icon: Network }
+      { name: 'Departments', path: '/admin/departments', icon: Network },
+      { name: 'Labs', path: '/admin/labs', icon: FlaskConical },
+      { name: 'Lab Departments', path: '/admin/lab-departments', icon: TestTube }
     ]
   },
   {
     title: 'Operations',
     items: [
-      { name: 'Appointments', path: '/admin/appointments', icon: CalendarCheck },
-      { name: 'OP Bookings', path: '/admin/services/op', icon: Activity },
+      { name: 'OP Bookings', path: '/admin/op-bookings', icon: Activity },
       { name: 'Video Consults', path: '/admin/services/video-consultation', icon: Video },
       { name: 'Lab Tests', path: '/admin/services/lab-tests', icon: TestTube },
       { name: 'Home Sample', path: '/admin/services/home-sample-collection', icon: Home },
@@ -70,7 +70,7 @@ const navGroups = [
     title: 'Finance',
     items: [
       { name: 'Transactions', path: '/admin/transactions', icon: CreditCard },
-      { name: 'Revenue', path: '/admin/transactions?type=revenue', icon: TrendingUp },
+      { name: 'Revenue', path: '/admin/revenue', icon: TrendingUp },
       { name: 'Settlements', path: '/admin/settlements', icon: Landmark }
     ]
   },
@@ -83,7 +83,8 @@ const navGroups = [
   {
     title: 'Analytics',
     items: [
-      { name: 'Reports & Analytics', path: '/admin/reports', icon: BarChart3 }
+      { name: 'Reports & Analytics', path: '/admin/reports', icon: BarChart3 },
+      { name: 'Requests History', path: '/admin/reports/requests-history', icon: ListTodo }
     ]
   },
   {
